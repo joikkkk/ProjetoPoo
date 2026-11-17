@@ -42,3 +42,10 @@ O projeto também possui uma versão de console iniciada pela classe `SistemaBib
 ## 👥 Integrantes
 
 * **Juan Mateus/ Iago Eterno e joao gabriel** - [@joikkkk](https://github.com/joikkkk)
+* Juan - Criou e configurou o Readme, gitignore, e organizou o projeto do github pelo terminal Git bush.
+
+* Iago - Criou as classes em java, fez executar o projeto em html e alterou o codigo das classes para que não haja possiveis erros.
+
+* Joao - responsavel por criar as 10 commits das alterações do projeto e colocar comentarios no codigo das classes.
+
+
