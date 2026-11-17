@@ -10,13 +10,21 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Controlador Web (Spring MVC) responsável por gerenciar as requisições HTTP
+ * e integrar as classes de domínio da biblioteca com a interface HTML (index.html).
+ */
 @Controller
 public class BibliotecaController {
 
+    // Listas polimórficas que armazenam instâncias das subclasses de ItemAcervo e Usuario
     private List<ItemAcervo> acervo = new ArrayList<>();
     private List<Usuario> usuarios = new ArrayList<>();
     private List<Emprestimo> emprestimos = new ArrayList<>();
 
+    /**
+     * Construtor que inicializa o sistema com alguns objetos pré-cadastrados para teste.
+     */
     public BibliotecaController() {
         acervo.add(new Livro("L1", "Java para Web"));
         acervo.add(new Revista("R1", "Spring Magazine"));
@@ -25,6 +33,9 @@ public class BibliotecaController {
         usuarios.add(new Professor("P1", "Maria Oliveira"));
     }
 
+    /**
+     * Rota principal (GET /) que envia as listas de acervo, usuários e empréstimos para a página index.html.
+     */
     @GetMapping("/")
     public String index(Model model) {
         model.addAttribute("acervo", acervo);
@@ -33,6 +44,9 @@ public class BibliotecaController {
         return "index";
     }
 
+    /**
+     * Cadastra um novo item instanciando a subclasse correspondente (Livro, Revista ou DVD).
+     */
     @PostMapping("/cadastrar-item")
     public String cadastrarItem(@RequestParam String id, @RequestParam String titulo, @RequestParam String tipo) {
         if (tipo.equals("Livro")) acervo.add(new Livro(id, titulo));
@@ -41,12 +55,30 @@ public class BibliotecaController {
         return "redirect:/";
     }
 
-    // NOVA OPÇÃO: Remover Item
+    /**
+     * Remove um item do acervo pelo ID, validando se ele existe e se não está emprestado.
+     * Aceita tanto o parâmetro 'id' quanto 'idItem' e evita erro 400 caso o campo venha vazio.
+     */
     @PostMapping("/remover-item")
-    public String removerItem(@RequestParam String id, RedirectAttributes attributes) {
-        ItemAcervo item = acervo.stream().filter(x -> x.getId().equals(id)).findFirst().orElse(null);
+    public String removerItem(
+            @RequestParam(value = "id", required = false) String id,
+            @RequestParam(value = "idItem", required = false) String idItem,
+            RedirectAttributes attributes) {
+
+        String identificador = (id != null && !id.trim().isEmpty()) ? id.trim() : (idItem != null ? idItem.trim() : "");
+
+        if (identificador.isEmpty()) {
+            attributes.addFlashAttribute("erro", "Erro: Informe ou selecione o ID do item para remover!");
+            return "redirect:/";
+        }
+
+        ItemAcervo item = acervo.stream()
+                .filter(x -> x.getId().equalsIgnoreCase(identificador))
+                .findFirst()
+                .orElse(null);
+
         if (item == null) {
-            attributes.addFlashAttribute("erro", "Erro: Item não encontrado no acervo!");
+            attributes.addFlashAttribute("erro", "Erro: Item '" + identificador + "' não encontrado no acervo!");
         } else if (item.isEmprestado()) {
             attributes.addFlashAttribute("erro", "Erro: Não é possível remover um item que está emprestado!");
         } else {
@@ -56,6 +88,9 @@ public class BibliotecaController {
         return "redirect:/";
     }
 
+    /**
+     * Cadastra um novo usuário instanciando a subclasse correspondente (Aluno ou Professor).
+     */
     @PostMapping("/cadastrar-usuario")
     public String cadastrarUsuario(@RequestParam String matricula, @RequestParam String nome, @RequestParam String tipo) {
         if (tipo.equals("Aluno")) usuarios.add(new Aluno(matricula, nome));
@@ -63,11 +98,19 @@ public class BibliotecaController {
         return "redirect:/";
     }
 
-    // NOVA OPÇÃO: Remover Usuário
+    /**
+     * Remove um usuário pela matrícula, impedindo a exclusão caso possua empréstimos ativos.
+     */
     @PostMapping("/remover-usuario")
-    public String removerUsuario(@RequestParam String matricula, RedirectAttributes attributes) {
-        Usuario u = usuarios.stream().filter(x -> x.getMatricula().equals(matricula)).findFirst().orElse(null);
-        boolean temEmprestimo = emprestimos.stream().anyMatch(emp -> emp.getUsuario().getMatricula().equals(matricula));
+    public String removerUsuario(@RequestParam(required = false) String matricula, RedirectAttributes attributes) {
+        if (matricula == null || matricula.trim().isEmpty()) {
+            attributes.addFlashAttribute("erro", "Erro: Informe a matrícula do usuário para remover!");
+            return "redirect:/";
+        }
+
+        String mat = matricula.trim();
+        Usuario u = usuarios.stream().filter(x -> x.getMatricula().equalsIgnoreCase(mat)).findFirst().orElse(null);
+        boolean temEmprestimo = emprestimos.stream().anyMatch(emp -> emp.getUsuario().getMatricula().equalsIgnoreCase(mat));
         
         if (u == null) {
             attributes.addFlashAttribute("erro", "Erro: Usuário não encontrado!");
@@ -80,10 +123,13 @@ public class BibliotecaController {
         return "redirect:/";
     }
 
+    /**
+     * Realiza o empréstimo validando disponibilidade do item e o limite polimórfico do usuário.
+     */
     @PostMapping("/emprestar")
     public String emprestar(@RequestParam String matricula, @RequestParam String idItem, RedirectAttributes attributes) {
-        Usuario u = usuarios.stream().filter(x -> x.getMatricula().equals(matricula)).findFirst().orElse(null);
-        ItemAcervo item = acervo.stream().filter(x -> x.getId().equals(idItem)).findFirst().orElse(null);
+        Usuario u = usuarios.stream().filter(x -> x.getMatricula().equalsIgnoreCase(matricula.trim())).findFirst().orElse(null);
+        ItemAcervo item = acervo.stream().filter(x -> x.getId().equalsIgnoreCase(idItem.trim())).findFirst().orElse(null);
 
         if (u == null || item == null) {
             attributes.addFlashAttribute("erro", "Usuário ou Item não encontrado!");
@@ -105,9 +151,12 @@ public class BibliotecaController {
         return "redirect:/";
     }
 
+    /**
+     * Registra a devolução de um item e aciona o cálculo polimórfico de multa caso haja atraso.
+     */
     @PostMapping("/devolver")
-    public String devolver(@RequestParam String idItem, @RequestParam int diasAtraso, RedirectAttributes attributes) {
-        Emprestimo emp = emprestimos.stream().filter(x -> x.getItem().getId().equals(idItem)).findFirst().orElse(null);
+    public String devolver(@RequestParam String idItem, @RequestParam(defaultValue = "0") int diasAtraso, RedirectAttributes attributes) {
+        Emprestimo emp = emprestimos.stream().filter(x -> x.getItem().getId().equalsIgnoreCase(idItem.trim())).findFirst().orElse(null);
         
         if (emp == null) {
             attributes.addFlashAttribute("erro", "Empréstimo não encontrado!");
@@ -116,6 +165,7 @@ public class BibliotecaController {
 
         double multa = 0.0;
         if (diasAtraso > 0) {
+            // Chamada polimórfica: cada tipo de item aplica sua própria tarifa diária
             multa = emp.getItem().calcularMulta(diasAtraso);
         }
 
